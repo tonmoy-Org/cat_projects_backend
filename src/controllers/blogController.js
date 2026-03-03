@@ -1,4 +1,5 @@
 const Blog = require("../models/Blog");
+const User = require("../models/User");
 
 const createBlog = async (req, res) => {
   try {
@@ -10,16 +11,21 @@ const createBlog = async (req, res) => {
       petType,
       isFeatured,
       tags,
-      type,
       excerpt,
       publishedAt,
     } = req.body;
 
-    const author = req.user?.name || req.user?.email || "Unknown Author";
+    const user = await User.findById(req.user.id);
 
-    if (!title || !content || !imageUrl || !category || !type) {
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    const author = user.name || user.email || "Unknown Author";
+
+    if (!title || !content || !imageUrl || !category) {
       return res.status(400).json({
-        error: "Title, content, image URL, category, and type are required",
+        error: "Title, content, image URL, and category are required",
       });
     }
 
@@ -36,7 +42,7 @@ const createBlog = async (req, res) => {
       category,
       petType,
       author,
-      type,
+      authorId: req.user.id,
       excerpt,
       isFeatured: isFeatured || false,
       tags: tags ? tags.filter((tag) => tag.trim() !== "") : [],
@@ -69,7 +75,6 @@ const getBlogs = async (req, res) => {
       featured,
       search,
       author,
-      type,
       petType,
       sort = "-createdAt",
       page = 1,
@@ -80,7 +85,6 @@ const getBlogs = async (req, res) => {
     if (category) query.category = category;
     if (featured) query.isFeatured = featured === "true";
     if (author) query.author = author;
-    if (type) query.type = type;
     if (petType) query.petType = petType;
     if (search) query.$text = { $search: search };
 
@@ -131,13 +135,21 @@ const getBlogById = async (req, res) => {
 
 const getMyBlogs = async (req, res) => {
   try {
-    const author = req.user?.name || req.user?.email;
+    const user = await User.findById(req.user.id);
 
-    if (!author) {
-      return res.status(400).json({ error: "Author information not found" });
+    if (!user) {
+      return res.status(404).json({ error: "User not found" });
     }
 
-    const blogs = await Blog.find({ author }).sort("-createdAt").select("-__v");
+    const blogs = await Blog.find({
+      $or: [
+        { author: user.name },
+        { author: user.email },
+        { authorId: req.user.id },
+      ],
+    })
+      .sort("-createdAt")
+      .select("-__v");
 
     res.status(200).json(blogs);
   } catch (error) {
