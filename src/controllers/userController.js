@@ -3,7 +3,7 @@ const { validationResult } = require('express-validator');
 
 const getAllUsers = async (req, res) => {
     try {
-        const { search, role, status, page = 1, limit = 20, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+        const { search, role, status, page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
         const filter = {};
 
         if (req.query.excludeCurrent === 'true') {
