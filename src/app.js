@@ -5,6 +5,7 @@ const userRoutes = require('./routes/userRoutes');
 const carouselRoutes = require('./routes/carouselRoutes');
 const blogRoute = require("./routes/blogRoutes");
 const socialVideoRouter = require("./routes/socialVideoRoutes");
+const catRoutes = require('./routes/catRoutes');
 
 const app = express();
 
@@ -23,6 +24,7 @@ app.use('/api/users', userRoutes);
 app.use('/api/carousel', carouselRoutes);
 app.use('/api/blogs', blogRoute);
 app.use("/api/videos", socialVideoRouter);
+app.use('/api/cats', catRoutes);
 
 app.get('/api/health', (req, res) => {
   res.status(200).json({ success: true, message: 'Server is running' });
