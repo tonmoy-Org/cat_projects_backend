@@ -102,7 +102,7 @@ const createUser = async (req, res) => {
             name,
             email,
             password,
-            role: role || 'member',
+            role: role || 'client',
             isActive: isActive !== undefined ? isActive : true,
         });
 
@@ -180,10 +180,6 @@ const deleteUser = async (req, res) => {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        if (user.role === 'superadmin') {
-            return res.status(403).json({ success: false, message: 'Cannot delete superadmin user' });
-        }
-
         if (user._id === req.user._id) {
             return res.status(403).json({ success: false, message: 'Cannot delete your own account' });
         }
@@ -206,10 +202,6 @@ const toggleUserStatus = async (req, res) => {
         const user = await User.findById(req.params.id);
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        if (user.role === 'superadmin') {
-            return res.status(403).json({ success: false, message: 'Cannot deactivate superadmin user' });
         }
 
         if (user._id === req.user._id) {

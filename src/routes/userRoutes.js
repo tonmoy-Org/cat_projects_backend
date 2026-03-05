@@ -12,13 +12,14 @@ const validateUser = [
     body('role').optional().isIn(['superadmin', 'member', 'client']),
 ];
 
+router.post('/register', createUser);
+
 router.use(authMiddleware.protect);
 
 const adminAccess = roleMiddleware.restrictTo('superadmin');
 
 router.get('/', adminAccess, getAllUsers);
 router.get('/:id', adminAccess, getUserById);
-router.post('/register', adminAccess, validateUser, createUser);
 router.put('/:id', adminAccess, validateUser, updateUser);
 router.delete('/:id', adminAccess, deleteUser);
 router.patch('/:id/toggle-status', adminAccess, toggleUserStatus);
