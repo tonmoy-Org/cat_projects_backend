@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const { validationResult } = require('express-validator');
+const bcrypt = require('bcryptjs');
 
 const getAllUsers = async (req, res) => {
     try {
@@ -93,15 +94,13 @@ const createUser = async (req, res) => {
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'User with this email already exists' });
         }
-
-        if (role === 'superadmin' && req.user.role !== 'superadmin') {
-            return res.status(403).json({ success: false, message: 'Only superadmin can create superadmin users' });
-        }
+        // Hash the password before saving
+        const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = new User({
             name,
             email,
-            password,
+            password: hashedPassword,
             role: role || 'client',
             isActive: isActive !== undefined ? isActive : true,
         });
