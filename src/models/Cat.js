@@ -8,6 +8,12 @@ const catSchema = new mongoose.Schema({
     minlength: [2, 'Name must be at least 2 characters long'],
     maxlength: [50, 'Name cannot exceed 50 characters']
   },
+  title_id: {
+    type: String,
+    required: true,
+    unique: true,
+    trim: true,
+  },
   gender: {
     type: String,
     required: [true, 'Gender is required'],
@@ -55,7 +61,7 @@ const catSchema = new mongoose.Schema({
   gallery: {
     type: [String],
     validate: {
-      validator: function(images) {
+      validator: function (images) {
         return images.length <= 4;
       },
       message: 'Gallery cannot have more than 4 images'
@@ -66,10 +72,6 @@ const catSchema = new mongoose.Schema({
     type: String,
     enum: ['available', 'adopted', 'pending', 'unavailable'],
     default: 'available'
-  },
-  views: {
-    type: Number,
-    default: 0
   },
   addedBy: {
     type: mongoose.Schema.Types.ObjectId,
@@ -94,36 +96,35 @@ const catSchema = new mongoose.Schema({
   toObject: { virtuals: true }
 });
 
-// Virtual for formatted age (if age is stored as string like "2 Years")
-catSchema.virtual('formattedAge').get(function() {
+catSchema.virtual('formattedAge').get(function () {
   return this.age;
 });
 
-// Virtual for gallery count
-catSchema.virtual('galleryCount').get(function() {
+catSchema.virtual('galleryCount').get(function () {
   return this.gallery ? this.gallery.length : 0;
 });
 
-// Index for search
 catSchema.index({ name: 'text', breed: 'text', about: 'text' });
 
-// Pre-save middleware to ensure gallery doesn't exceed limit
-catSchema.pre('save', function(next) {
+catSchema.pre('save', function (next) {
   if (this.gallery && this.gallery.length > 4) {
     this.gallery = this.gallery.slice(0, 4);
   }
   next();
 });
 
-// Method to increment view count
-catSchema.methods.incrementViews = function() {
-  this.views += 1;
-  return this.save();
-};
-
-// Static method to get available cats
-catSchema.statics.getAvailable = function() {
+catSchema.statics.getAvailable = function () {
   return this.find({ status: 'available' }).sort('-createdAt');
 };
+
+catSchema.pre("save", function (next) {
+  if (this.isModified("title")) {
+    this.title_id = this.name
+      .toLowerCase()
+      .replace(/[^\w\s]/gi, "")
+      .replace(/\s+/g, "_");
+  }
+  next();
+});
 
 module.exports = mongoose.model('Cat', catSchema);

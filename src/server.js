@@ -2,6 +2,7 @@ const dotenv = require('dotenv');
 
 // Load environment variables FIRST
 dotenv.config();
+require('./../utils/cloudinary'); 
 
 const { connectDB } = require('./config/db');
 const app = require('./app');
