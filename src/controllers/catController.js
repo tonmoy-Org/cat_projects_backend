@@ -112,7 +112,14 @@ const getAllCats = async (req, res) => {
 
 const getCatById = async (req, res) => {
     try {
-        const cat = await Cat.findById(req.params.id)
+        const { id } = req.params;
+
+        const cat = await Cat.findOne({
+            $or: [
+                { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null },
+                { title_id: id }
+            ]
+        })
             .populate('addedBy', 'name email')
             .populate('adoptedBy', 'name email');
 

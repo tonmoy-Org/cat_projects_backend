@@ -104,8 +104,17 @@ const getAllProducts = async (req, res) => {
 
 const getProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id).populate('addedBy', 'name email');
+    const { id } = req.params;
+
+    const product = await Product.findOne({
+      $or: [
+        { _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null },
+        { title_id: id }
+      ]
+    }).populate('addedBy', 'name email');
+
     if (!product) return res.status(404).json({ success: false, message: 'Product not found' });
+
     res.status(200).json({ success: true, data: product });
   } catch (error) {
     res.status(500).json({ success: false, message: 'Failed to fetch product', error: error.message });
