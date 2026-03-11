@@ -12,7 +12,7 @@ const app = express();
 
 app.use(
   cors({
-    origin: ['http://localhost:5173', 'https://fatherofmeow.com', 'https://www.fatherofmeow.com'],
+    origin: ['http://localhost:5173', 'https://fatherofmeow.com'],
     credentials: true,
   })
 );
