@@ -23,7 +23,7 @@ router.get('/', listCarousel);
 router.get('/:id', getCarousel);
 
 // Protected routes
-router.post('/', protect, upload.single('image'), createCarousel);
+router.post('/', protect, createCarousel);
 router.put('/:id', protect, upload.single('image'), updateCarousel);
 router.delete('/:id', protect, deleteCarousel);
 
