@@ -28,17 +28,15 @@ const productUpload = upload.fields([
   { name: 'gallery', maxCount: 4 },
 ]);
 
-// ── Products ─────────────────────────────────────────────────────────────────
 router.get('/', getAllProducts);
 router.get('/:id', getProductById);
 router.post('/', protect, productUpload, createProduct);
 router.put('/:id', protect, productUpload, updateProduct);
 router.delete('/:id', protect, deleteProduct);
 
-// ── Reviews ──────────────────────────────────────────────────────────────────
 router.get('/:id/reviews', getReviews);
-router.post('/:id/reviews', addReview);                                    // public
-router.delete('/:id/reviews/:reviewId', protect, deleteReview);            // admin
-router.patch('/:id/reviews/:reviewId/approve', protect, toggleReviewApproval); // admin
+router.post('/:id/reviews', addReview);                                    
+router.delete('/:id/reviews/:reviewId', protect, deleteReview);            
+router.patch('/:id/reviews/:reviewId/approve', protect, toggleReviewApproval);
 
 module.exports = router;
