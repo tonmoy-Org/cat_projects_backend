@@ -107,6 +107,11 @@ const catSchema = new mongoose.Schema(
       default: true,
     },
 
+    isFeatured: {
+      type: Boolean,
+      default: false,
+    },
+
     about: {
       type: String,
       trim: true,

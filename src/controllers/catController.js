@@ -19,7 +19,7 @@ const uploadToCloudinary = (buffer, folder = 'cats') =>
 
 const createCat = async (req, res) => {
   try {
-    const { name, gender, age, breed, neutered, vaccinated, size, price, features, about, inStock } = req.body;
+    const { name, gender, age, breed, neutered, vaccinated, size, price, features, about, inStock, isFeatured } = req.body;
 
     if (!name) return res.status(400).json({ success: false, message: 'Name is required' });
     if (!gender) return res.status(400).json({ success: false, message: 'Gender is required' });
@@ -57,6 +57,7 @@ const createCat = async (req, res) => {
       features: features || '',
       about: about || '',
       inStock: inStock === 'true' || inStock === true,
+      isFeatured: isFeatured === 'true' || isFeatured === true,
       featuredImage: featuredResult.secure_url,
       gallery: galleryUrls,
       addedBy: req.user?._id || req.user?.id,
@@ -88,6 +89,7 @@ const getAllCats = async (req, res) => {
       search,
       minPrice,
       maxPrice,
+      isFeatured,
       sortBy = '-createdAt',
     } = req.query;
 
@@ -97,6 +99,7 @@ const getAllCats = async (req, res) => {
     if (status) filter.status = status;
     if (neutered !== undefined) filter.neutered = neutered === 'true';
     if (vaccinated !== undefined) filter.vaccinated = vaccinated === 'true';
+    if (isFeatured !== undefined) filter.isFeatured = isFeatured === 'true';
     if (breed) filter.breed = { $regex: breed, $options: 'i' };
     
     if (minPrice !== undefined || maxPrice !== undefined) {
@@ -173,6 +176,8 @@ const updateCat = async (req, res) => {
       updateData.vaccinated = updateData.vaccinated === 'true' || updateData.vaccinated === true;
     if (updateData.inStock !== undefined)
       updateData.inStock = updateData.inStock === 'true' || updateData.inStock === true;
+    if (updateData.isFeatured !== undefined)
+      updateData.isFeatured = updateData.isFeatured === 'true' || updateData.isFeatured === true;
 
     if (updateData.name && updateData.name !== cat.name) {
       updateData.title_id = updateData.name
