@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
 
+
 const reviewSchema = new mongoose.Schema(
   {
     name: {
@@ -28,17 +29,24 @@ const reviewSchema = new mongoose.Schema(
     },
     approved: {
       type: Boolean,
-      default: true, // set false if you want manual moderation
+      default: true,
     },
   },
   { timestamps: true }
 );
 
+// ─── Product Schema ────────────────────────────────────────────────────────────
+
 const productSchema = new mongoose.Schema(
   {
+    name: {
+      type: String,
+      required: [true, 'Product name is required'],
+      trim: true,
+      maxlength: [120, 'Name cannot exceed 120 characters'],
+    },
     title: {
       type: String,
-      required: [true, 'Title is required'],
       trim: true,
       maxlength: [120, 'Title cannot exceed 120 characters'],
     },
@@ -53,12 +61,17 @@ const productSchema = new mongoose.Schema(
       required: [true, 'Price is required'],
       min: [0, 'Price cannot be negative'],
     },
+    stock: {
+      type: Number,
+      required: [true, 'Stock quantity is required'],
+      min: [0, 'Stock cannot be negative'],
+      default: 0,
+    },
     description: {
       type: String,
       required: [true, 'Description is required'],
       trim: true,
     },
-    // Extra rich-text features/highlights block (editable from dashboard)
     features: {
       type: String,
       trim: true,
@@ -102,7 +115,6 @@ const productSchema = new mongoose.Schema(
       type: [reviewSchema],
       default: [],
     },
-    // Denormalised for fast sorting/filtering
     averageRating: {
       type: Number,
       default: 0,
@@ -114,21 +126,46 @@ const productSchema = new mongoose.Schema(
       default: 0,
     },
   },
-  { timestamps: true }
+  {
+    timestamps: true,
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true },
+  }
 );
 
-// Auto-generate title_id
+productSchema.index({ category: 1 });
+productSchema.index({ isFeatured: 1 });
+productSchema.index({ price: 1 });
+productSchema.index({ averageRating: -1 });
+
+
 productSchema.pre('save', function (next) {
-  if (this.isModified('title') || !this.title_id) {
-    this.title_id = this.title
+  if (this.isModified('name') && !this.isModified('title')) {
+    this.title = this.name;
+  } else if (this.isModified('title') && !this.isModified('name')) {
+    this.name = this.title;
+  } else if (!this.name && this.title) {
+    this.name = this.title;
+  } else if (!this.title && this.name) {
+    this.title = this.name;
+  }
+
+
+  if (this.isModified('name') || !this.title_id) {
+    this.title_id = this.name
       .toLowerCase()
       .replace(/[^\w\s]/gi, '')
       .replace(/\s+/g, '_');
   }
+
+  // Keep inStock flag in sync with stock count
+  if (this.isModified('stock')) {
+    this.inStock = this.stock > 0;
+  }
+
   next();
 });
 
-// Recalculate averageRating & reviewCount whenever reviews change
 productSchema.methods.recalcRating = function () {
   const approved = this.reviews.filter((r) => r.approved);
   this.reviewCount = approved.length;
@@ -138,6 +175,14 @@ productSchema.methods.recalcRating = function () {
           (approved.reduce((sum, r) => sum + r.rating, 0) / approved.length).toFixed(1)
         )
       : 0;
+};
+
+productSchema.statics.findFeatured = function () {
+  return this.find({ isFeatured: true, inStock: true }).sort({ createdAt: -1 });
+};
+
+productSchema.statics.findInStock = function () {
+  return this.find({ inStock: true, stock: { $gt: 0 } });
 };
 
 module.exports = mongoose.model('Product', productSchema);

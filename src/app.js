@@ -7,6 +7,8 @@ const blogRoute = require("./routes/blogRoutes");
 const socialVideoRouter = require("./routes/socialVideoRoutes");
 const catRoutes = require('./routes/catRoutes');
 const productRoutes = require('./routes/productRoutes');
+const paymentRoutes = require('./routes/paymentRoutes');
+const orderRoutes = require('./routes/orderRoutes');
 
 const app = express();
 
@@ -27,17 +29,16 @@ app.use('/api/blogs', blogRoute);
 app.use("/api/videos", socialVideoRouter);
 app.use('/api/cats', catRoutes);
 app.use('/api/products', productRoutes);
+app.use('/api/payment', paymentRoutes);
+app.use('/api/orders', orderRoutes);
 
 app.get('/api/health', (req, res) => {
   res.status(200).json({ success: true, message: 'Server is running' });
 });
 
-// Error handling middleware
 app.use((err, req, res, next) => {
   console.error(err.stack);
-  res
-    .status(500)
-    .json({ success: false, message: 'Internal server error' });
+  res.status(500).json({ success: false, message: 'Internal server error' });
 });
 
 module.exports = app;

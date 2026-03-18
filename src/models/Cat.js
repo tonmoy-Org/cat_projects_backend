@@ -45,7 +45,7 @@ const catSchema = new mongoose.Schema(
       required: [true, 'Cat name is required'],
       trim: true,
       minlength: [2, 'Name must be at least 2 characters long'],
-      maxlength: [50, 'Name cannot exceed 50 characters']
+      maxlength: [50, 'Name cannot exceed 50 characters'],
     },
     title_id: {
       type: String,
@@ -59,99 +59,97 @@ const catSchema = new mongoose.Schema(
       required: [true, 'Gender is required'],
       enum: {
         values: ['male', 'female'],
-        message: 'Gender must be either male or female'
-      }
+        message: 'Gender must be either male or female',
+      },
     },
     neutered: {
       type: Boolean,
-      default: false
+      default: false,
     },
     age: {
       type: String,
       required: [true, 'Age is required'],
-      trim: true
+      trim: true,
     },
     breed: {
       type: String,
       required: [true, 'Breed is required'],
-      trim: true
+      trim: true,
     },
     vaccinated: {
       type: Boolean,
-      default: false
+      default: false,
     },
     size: {
       type: String,
       required: [true, 'Size is required'],
       enum: {
         values: ['small', 'medium', 'large'],
-        message: 'Size must be small, medium, or large'
+        message: 'Size must be small, medium, or large',
       },
-      default: 'medium'
+      default: 'medium',
     },
     price: {
       type: Number,
       required: [true, 'Adoption fee is required'],
       min: [0, 'Price cannot be negative'],
-      default: 0
+      default: 0,
+    },
+    stock: {
+      type: Number,
+      required: [true, 'Stock is required'],
+      min: [0, 'Stock cannot be negative'],
+      default: 1,
     },
     features: {
       type: String,
       trim: true,
       default: '',
-      maxlength: [2000, 'Features cannot exceed 2000 characters']
+      maxlength: [2000, 'Features cannot exceed 2000 characters'],
     },
-
     inStock: {
       type: Boolean,
       default: true,
     },
-
     isFeatured: {
       type: Boolean,
       default: false,
     },
-
     about: {
       type: String,
       trim: true,
-      maxlength: [1000, 'About section cannot exceed 1000 characters']
+      maxlength: [1000, 'About section cannot exceed 1000 characters'],
     },
-
     featuredImage: {
       type: String,
-      required: [true, 'Featured image is required']
+      required: [true, 'Featured image is required'],
     },
-
     gallery: {
       type: [String],
       validate: {
         validator: function (images) {
           return images.length <= 4;
         },
-        message: 'Gallery cannot have more than 4 images'
+        message: 'Gallery cannot have more than 4 images',
       },
-      default: []
+      default: [],
     },
-
     status: {
       type: String,
       enum: ['available', 'adopted', 'pending', 'unavailable'],
-      default: 'available'
+      default: 'available',
+      index: true,
     },
-
     addedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      ref: 'User',
     },
-
     adoptedBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
+      ref: 'User',
     },
-
     adoptionDate: {
-      type: Date
+      type: Date,
     },
     reviews: {
       type: [reviewSchema],
@@ -163,37 +161,65 @@ const catSchema = new mongoose.Schema(
       min: 0,
       max: 5,
     },
-
     reviewCount: {
       type: Number,
       default: 0,
     },
-
-    medicalHistory: [{
-      date: Date,
-      description: String,
-      vetName: String,
-      documents: [String]
-    }]
+    medicalHistory: [
+      {
+        date: Date,
+        description: String,
+        vetName: String,
+        documents: [String],
+      },
+    ],
   },
   {
     timestamps: true,
     toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    toObject: { virtuals: true },
   }
 );
 
 
+catSchema.index({ status: 1, breed: 1 });
+catSchema.index({ isFeatured: 1 });
+catSchema.index({ price: 1 });
+catSchema.index({ averageRating: -1 });
+
 catSchema.pre('save', function (next) {
+  // Auto-generate title_id from name
   if (this.isModified('name') || !this.title_id) {
     this.title_id = this.name
       .toLowerCase()
       .replace(/[^\w\s]/gi, '')
       .replace(/\s+/g, '_');
   }
+
+  if (this.isModified('stock')) {
+    if (this.stock <= 0) {
+      this.inStock = false;
+      if (this.status === 'available') {
+        this.status = 'unavailable';
+      }
+    } else {
+      this.inStock = true;
+      if (this.status === 'unavailable') {
+        this.status = 'available';
+      }
+    }
+  }
+
+  if (this.isModified('status') && this.status === 'adopted') {
+    this.inStock = false;
+    this.stock = 0;
+    if (!this.adoptionDate) {
+      this.adoptionDate = new Date();
+    }
+  }
+
   next();
 });
-
 
 catSchema.methods.recalcRating = function () {
   const approved = this.reviews.filter((r) => r.approved);
@@ -201,10 +227,17 @@ catSchema.methods.recalcRating = function () {
   this.averageRating =
     approved.length > 0
       ? parseFloat(
-        (approved.reduce((sum, r) => sum + r.rating, 0) / approved.length).toFixed(1)
-      )
+          (approved.reduce((sum, r) => sum + r.rating, 0) / approved.length).toFixed(1)
+        )
       : 0;
 };
 
+catSchema.statics.findAvailable = function () {
+  return this.find({ status: 'available', stock: { $gt: 0 } }).sort({ createdAt: -1 });
+};
+
+catSchema.statics.findFeatured = function () {
+  return this.find({ isFeatured: true, status: 'available' }).sort({ createdAt: -1 });
+};
 
 module.exports = mongoose.model('Cat', catSchema);
