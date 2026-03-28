@@ -26,6 +26,7 @@ const formatUserResponse = (user) => {
     name: user.name,
     email: user.email,
     role: user.role,
+    address: user.address,
     department: user.department,
     isActive: user.isActive,
     devices: user.devices || [],
@@ -184,7 +185,7 @@ const getMe = async (req, res) => {
 
 const updateProfile = async (req, res) => {
   try {
-    const { name, email } = req.body;
+    const { name, email, address } = req.body;
 
     const user = await User.findById(req.user.id);
 
@@ -192,7 +193,6 @@ const updateProfile = async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
-    // Check if email is being changed and if it already exists
     if (email && email !== user.email) {
       const existingUser = await User.findOne({ email });
       if (existingUser && existingUser._id.toString() !== user._id.toString()) {
@@ -205,6 +205,7 @@ const updateProfile = async (req, res) => {
     }
 
     user.name = name || user.name;
+    user.address = address || user.address;
 
     await user.save();
 

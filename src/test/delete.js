@@ -1,26 +1,36 @@
 const mongoose = require("mongoose");
-const Blog = require("../models/Blog");
-const Carousel = require("../models/Carousel");
-const Cat = require("../models/Cat");
-const Product = require("../models/Product");
+const Cart = require("../models/Cart");
 
-async function deleteAllData() {
+async function fixCartCollection() {
   try {
     await mongoose.connect("mongodb://shamz-db:Me%40shameem143%40eM@145.223.22.69:27017/FatherOfMeowDB?authSource=admin");
 
     console.log("MongoDB Connected");
 
-    await Blog.deleteMany({});
-    await Carousel.deleteMany({});
-    await Cat.deleteMany({});
-    await Product.deleteMany({});
+    // 🔥 Drop wrong index
+    try {
+      await mongoose.connection.db.collection('carts').dropIndex('userId_1');
+      console.log("Dropped old userId index");
+    } catch (err) {
+      console.log("No old index found");
+    }
 
-    console.log("All documents deleted successfully");
+    // 🧹 Clean bad data
+    await Cart.deleteMany({ user: null });
+
+    // ✅ Ensure correct index
+    await mongoose.connection.db.collection('carts').createIndex(
+      { user: 1 },
+      { unique: true }
+    );
+
+    console.log("Cart collection fixed ✅");
 
     await mongoose.disconnect();
+
   } catch (error) {
-    console.error("Error deleting documents:", error);
+    console.error(error);
   }
 }
 
-deleteAllData();
+fixCartCollection();

@@ -62,6 +62,10 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: 'General'
     },
+    address: {
+      type: String,
+      default: '',
+    },
     devices: {
       type: [deviceSchema],
       default: []

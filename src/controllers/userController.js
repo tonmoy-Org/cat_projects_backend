@@ -88,7 +88,7 @@ const createUser = async (req, res) => {
     }
 
     try {
-        const { name, email, password, role, isActive } = req.body;
+        const { name, email, password, role, isActive, address } = req.body;
 
         const existingUser = await User.findOne({ email });
         if (existingUser) {
@@ -103,6 +103,7 @@ const createUser = async (req, res) => {
             password: hashedPassword,
             role: role || 'client',
             isActive: isActive !== undefined ? isActive : true,
+            address: address || '',
         });
 
         await user.save();
@@ -126,7 +127,7 @@ const createUser = async (req, res) => {
 
 const updateUser = async (req, res) => {
     try {
-        const { name, email, role, password, isActive } = req.body;
+        const { name, email, role, password, isActive, address } = req.body;
 
         let user = await User.findById(req.params.id);
         if (!user) {
@@ -145,8 +146,11 @@ const updateUser = async (req, res) => {
         if (name) updateData.name = name;
         if (email) updateData.email = email;
         if (role) updateData.role = role;
+        if (address !== undefined) updateData.address = address;
         if (typeof isActive !== 'undefined') updateData.isActive = isActive;
-        if (password && password.trim() !== '') updateData.password = password;
+        if (password && password.trim() !== '') {
+            updateData.password = await bcrypt.hash(password, 10);
+        }
 
         user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true })
             .select('-password -resetPasswordToken -resetPasswordExpire');
@@ -227,11 +231,63 @@ const toggleUserStatus = async (req, res) => {
     }
 };
 
+const removeDevice = async (req, res) => {
+    try {
+        const { userId, deviceId } = req.params;
+        console.log(req.params);
+        
+        // Use userId from params instead of body
+        const targetUserId = userId || req.user._id;
+        const user = await User.findById(targetUserId);
+
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        // Check authorization - user can only remove their own devices, admin can remove any device
+        if (targetUserId.toString() !== req.user._id.toString() && req.user.role !== 'superadmin') {
+            return res.status(403).json({ success: false, message: 'You do not have permission to remove this device' });
+        }
+
+        // Find and remove the device from the devices array
+        const deviceIndex = user.devices.findIndex(device => device._id.toString() === deviceId);
+
+        if (deviceIndex === -1) {
+            return res.status(404).json({ success: false, message: 'Device not found' });
+        }
+
+        // Remove the device from the array
+        user.devices.splice(deviceIndex, 1);
+        await user.save();
+
+        // Return the updated user without sensitive data
+        const userResponse = user.toObject();
+        delete userResponse.password;
+        delete userResponse.resetPasswordToken;
+        delete userResponse.resetPasswordExpire;
+
+        res.status(200).json({
+            success: true,
+            message: 'Device removed successfully',
+            data: userResponse
+        });
+
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({
+            success: false,
+            message: 'Server error while removing device',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        });
+    }
+};
+
 module.exports = {
     getAllUsers,
     getUserById,
     createUser,
     updateUser,
     deleteUser,
-    toggleUserStatus
+    toggleUserStatus,
+    removeDevice
 };
