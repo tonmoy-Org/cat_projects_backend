@@ -12,21 +12,15 @@ const { protect } = require('../middleware/authMiddleware');
 
 const router = express.Router();
 
-// Public routes (no authentication required)
 router.post('/login', login);
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
-router.get('/validate-reset-token/:token', validateResetToken); 
+router.get('/validate-reset-token/:token', validateResetToken);
 
-// Protected routes (require authentication)
-const protectedRouter = express.Router();
-protectedRouter.use(protect);
+router.use(protect);
 
-protectedRouter.get('/me', getMe);
-protectedRouter.put('/profile', updateProfile);
-protectedRouter.put('/change-password', changePassword);
-
-
-router.use(protectedRouter);
+router.get('/me', getMe);
+router.put('/profile', updateProfile);
+router.put('/change-password', changePassword);
 
 module.exports = router;

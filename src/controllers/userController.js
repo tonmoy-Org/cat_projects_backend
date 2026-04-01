@@ -5,21 +5,18 @@ const bcrypt = require('bcryptjs');
 const getAllUsers = async (req, res) => {
     try {
         const { search, role, status, page = 1, limit = 10, sortBy = 'createdAt', sortOrder = 'desc' } = req.query;
+        
         const filter = {};
-
+        
         if (req.query.excludeCurrent === 'true') {
             filter._id = { $ne: req.user._id };
         }
-
         if (role && role !== 'all') {
             filter.role = role;
         }
-
         if (status && status !== 'all') {
-            if (status === 'active') filter.isActive = true;
-            if (status === 'inactive') filter.isActive = false;
+            filter.isActive = status === 'active';
         }
-
         if (search) {
             filter.$or = [
                 { name: { $regex: search, $options: 'i' } },
@@ -49,7 +46,6 @@ const getAllUsers = async (req, res) => {
             currentPage: parseInt(page),
             data: users,
         });
-
     } catch (error) {
         console.error(error);
         res.status(500).json({
@@ -70,7 +66,6 @@ const getUserById = async (req, res) => {
         }
 
         res.status(200).json({ success: true, data: user });
-
     } catch (error) {
         console.error(error);
         res.status(500).json({
@@ -94,7 +89,7 @@ const createUser = async (req, res) => {
         if (existingUser) {
             return res.status(400).json({ success: false, message: 'User with this email already exists' });
         }
-        // Hash the password before saving
+
         const hashedPassword = await bcrypt.hash(password, 10);
 
         const user = new User({
@@ -113,8 +108,11 @@ const createUser = async (req, res) => {
         delete userResponse.resetPasswordToken;
         delete userResponse.resetPasswordExpire;
 
-        res.status(201).json({ success: true, message: 'User created successfully', data: userResponse });
-
+        res.status(201).json({ 
+            success: true, 
+            message: 'User created successfully', 
+            data: userResponse 
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({
@@ -128,18 +126,10 @@ const createUser = async (req, res) => {
 const updateUser = async (req, res) => {
     try {
         const { name, email, role, password, isActive, address } = req.body;
-
+        
         let user = await User.findById(req.params.id);
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
-        }
-
-        if (user.role === 'superadmin' && req.user.role !== 'superadmin') {
-            return res.status(403).json({ success: false, message: 'Only superadmin can modify superadmin users' });
-        }
-
-        if (role === 'superadmin' && req.user.role !== 'superadmin') {
-            return res.status(403).json({ success: false, message: 'Only superadmin can assign superadmin role' });
         }
 
         const updateData = {};
@@ -148,21 +138,27 @@ const updateUser = async (req, res) => {
         if (role) updateData.role = role;
         if (address !== undefined) updateData.address = address;
         if (typeof isActive !== 'undefined') updateData.isActive = isActive;
+        
         if (password && password.trim() !== '') {
             updateData.password = await bcrypt.hash(password, 10);
         }
 
-        user = await User.findByIdAndUpdate(req.params.id, updateData, { new: true, runValidators: true })
-            .select('-password -resetPasswordToken -resetPasswordExpire');
+        user = await User.findByIdAndUpdate(req.params.id, updateData, { 
+            new: true, 
+            runValidators: true 
+        }).select('-password -resetPasswordToken -resetPasswordExpire');
 
-        res.status(200).json({ success: true, message: 'User updated successfully', data: user });
-
+        res.status(200).json({ 
+            success: true, 
+            message: 'User updated successfully', 
+            data: user 
+        });
     } catch (error) {
         console.error(error);
+        
         if (error.code === 11000) {
             return res.status(400).json({ success: false, message: 'Email already exists' });
         }
-
         if (error.name === 'ValidationError') {
             const messages = Object.values(error.errors).map(val => val.message);
             return res.status(400).json({ success: false, message: messages.join(', ') });
@@ -182,14 +178,13 @@ const deleteUser = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
-
-        if (user._id === req.user._id) {
+        if (user._id.toString() === req.user._id.toString()) {
             return res.status(403).json({ success: false, message: 'Cannot delete your own account' });
         }
 
         await User.findByIdAndDelete(req.params.id);
+        
         res.status(200).json({ success: true, message: 'User deleted successfully' });
-
     } catch (error) {
         console.error(error);
         res.status(500).json({
@@ -206,8 +201,7 @@ const toggleUserStatus = async (req, res) => {
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
-
-        if (user._id === req.user._id) {
+        if (user._id.toString() === req.user._id.toString()) {
             return res.status(403).json({ success: false, message: 'Cannot deactivate your own account' });
         }
 
@@ -219,8 +213,11 @@ const toggleUserStatus = async (req, res) => {
         delete userResponse.resetPasswordToken;
         delete userResponse.resetPasswordExpire;
 
-        res.status(200).json({ success: true, message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`, data: userResponse });
-
+        res.status(200).json({ 
+            success: true, 
+            message: `User ${user.isActive ? 'activated' : 'deactivated'} successfully`, 
+            data: userResponse 
+        });
     } catch (error) {
         console.error(error);
         res.status(500).json({
@@ -234,33 +231,26 @@ const toggleUserStatus = async (req, res) => {
 const removeDevice = async (req, res) => {
     try {
         const { userId, deviceId } = req.params;
-        console.log(req.params);
         
-        // Use userId from params instead of body
         const targetUserId = userId || req.user._id;
         const user = await User.findById(targetUserId);
-
+        
         if (!user) {
             return res.status(404).json({ success: false, message: 'User not found' });
         }
 
-        // Check authorization - user can only remove their own devices, admin can remove any device
         if (targetUserId.toString() !== req.user._id.toString() && req.user.role !== 'superadmin') {
             return res.status(403).json({ success: false, message: 'You do not have permission to remove this device' });
         }
 
-        // Find and remove the device from the devices array
         const deviceIndex = user.devices.findIndex(device => device._id.toString() === deviceId);
-
         if (deviceIndex === -1) {
             return res.status(404).json({ success: false, message: 'Device not found' });
         }
 
-        // Remove the device from the array
         user.devices.splice(deviceIndex, 1);
         await user.save();
 
-        // Return the updated user without sensitive data
         const userResponse = user.toObject();
         delete userResponse.password;
         delete userResponse.resetPasswordToken;
@@ -271,13 +261,186 @@ const removeDevice = async (req, res) => {
             message: 'Device removed successfully',
             data: userResponse
         });
-
     } catch (error) {
         console.error(error);
         res.status(500).json({
             success: false,
             message: 'Server error while removing device',
             error: process.env.NODE_ENV === 'development' ? error.message : undefined,
+        });
+    }
+};
+
+const getMyAddresses = async (req, res) => {
+    try {
+        const user = await User.findById(req.user.id).select('addresses');
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+        res.status(200).json({ success: true, data: user.addresses });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error', 
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+        });
+    }
+};
+
+const addMyAddress = async (req, res) => {
+    try {
+        const { label, fullName, phoneNumber, street, city, state, postalCode, country, isDefault } = req.body;
+        
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        if (isDefault) {
+            user.addresses.forEach(addr => { addr.isDefault = false; });
+        }
+
+        user.addresses.push({ 
+            label, 
+            fullName, 
+            phoneNumber, 
+            street, 
+            city, 
+            state, 
+            postalCode, 
+            country, 
+            isDefault: isDefault || false 
+        });
+
+        await user.save();
+        
+        res.status(201).json({ 
+            success: true, 
+            message: 'Address added successfully', 
+            data: user.addresses 
+        });
+    } catch (error) {
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(v => v.message);
+            return res.status(400).json({ success: false, message: messages.join(', ') });
+        }
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error', 
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+        });
+    }
+};
+
+const updateMyAddress = async (req, res) => {
+    try {
+        const { addressId } = req.params;
+        const { label, fullName, phoneNumber, street, city, state, postalCode, country, isDefault } = req.body;
+        
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const address = user.addresses.id(addressId);
+        if (!address) {
+            return res.status(404).json({ success: false, message: 'Address not found' });
+        }
+
+        if (isDefault) {
+            user.addresses.forEach(addr => { addr.isDefault = false; });
+        }
+
+        if (label !== undefined) address.label = label;
+        if (fullName !== undefined) address.fullName = fullName;
+        if (phoneNumber !== undefined) address.phoneNumber = phoneNumber;
+        if (street !== undefined) address.street = street;
+        if (city !== undefined) address.city = city;
+        if (state !== undefined) address.state = state;
+        if (postalCode !== undefined) address.postalCode = postalCode;
+        if (country !== undefined) address.country = country;
+        if (isDefault !== undefined) address.isDefault = isDefault;
+
+        await user.save();
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Address updated successfully', 
+            data: user.addresses 
+        });
+    } catch (error) {
+        if (error.name === 'ValidationError') {
+            const messages = Object.values(error.errors).map(v => v.message);
+            return res.status(400).json({ success: false, message: messages.join(', ') });
+        }
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error', 
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+        });
+    }
+};
+
+const deleteMyAddress = async (req, res) => {
+    try {
+        const { addressId } = req.params;
+        
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const address = user.addresses.id(addressId);
+        if (!address) {
+            return res.status(404).json({ success: false, message: 'Address not found' });
+        }
+
+        address.deleteOne();
+        await user.save();
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Address deleted successfully', 
+            data: user.addresses 
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error', 
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined 
+        });
+    }
+};
+
+const setDefaultAddress = async (req, res) => {
+    try {
+        const { addressId } = req.params;
+        
+        const user = await User.findById(req.user.id);
+        if (!user) {
+            return res.status(404).json({ success: false, message: 'User not found' });
+        }
+
+        const address = user.addresses.id(addressId);
+        if (!address) {
+            return res.status(404).json({ success: false, message: 'Address not found' });
+        }
+
+        user.addresses.forEach(addr => { addr.isDefault = false; });
+        address.isDefault = true;
+
+        await user.save();
+
+        res.status(200).json({ 
+            success: true, 
+            message: 'Default address updated', 
+            data: user.addresses 
+        });
+    } catch (error) {
+        res.status(500).json({ 
+            success: false, 
+            message: 'Server error', 
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined 
         });
     }
 };
@@ -289,5 +452,10 @@ module.exports = {
     updateUser,
     deleteUser,
     toggleUserStatus,
-    removeDevice
+    removeDevice,
+    getMyAddresses,
+    addMyAddress,
+    updateMyAddress,
+    deleteMyAddress,
+    setDefaultAddress
 };

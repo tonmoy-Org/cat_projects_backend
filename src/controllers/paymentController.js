@@ -5,13 +5,14 @@ const Cat = require('../models/Cat');
 const sslcz = require('../config/sslcommerz');
 const { sendOrderConfirmationEmail } = require('../../utils/Emailservice');
 const { generateOrderId, generateTransactionId } = require('../../utils/Idgenerator');
+const Cart = require('../models/Cart');
 
 const resolveItem = async (productId) => {
     const product = await Product.findById(productId).lean();
-    if (product) return { doc: product, model: 'product' };
+    if (product) return { doc: product, itemType: 'product' };
 
     const cat = await Cat.findById(productId).lean();
-    if (cat) return { doc: cat, model: 'cat' };
+    if (cat) return { doc: cat, itemType: 'cat' };
 
     return null;
 };
@@ -28,17 +29,83 @@ const buildStockDecrementOps = (items) => {
             },
         };
 
-        if (item.model === 'cat') catOps.push(op);
-        else productOps.push(op);
+        if (item.itemType === 'cat') {
+            catOps.push(op);
+        } else {
+            productOps.push(op);
+        }
     }
 
     return { productOps, catOps };
 };
 
-
 const applyStockOps = async ({ productOps, catOps }) => {
-    if (productOps.length) await Product.bulkWrite(productOps);
-    if (catOps.length) await Cat.bulkWrite(catOps);
+    if (productOps.length) {
+        await Product.bulkWrite(productOps);
+    }
+    if (catOps.length) {
+        await Cat.bulkWrite(catOps);
+    }
+};
+
+const updateCatStatusAfterAdoption = async (items) => {
+    const catUpdates = [];
+
+    for (const item of items) {
+        if (item.itemType === 'cat') {
+            const cat = await Cat.findById(item.productId);
+            if (cat) {
+                const newStock = cat.stock - item.quantity;
+                const updateData = newStock <= 0
+                    ? { status: 'adopted', inStock: false }
+                    : { status: 'available', inStock: true };
+
+                catUpdates.push(
+                    Cat.findByIdAndUpdate(item.productId, updateData, { new: true })
+                );
+            }
+        }
+    }
+
+    if (catUpdates.length) {
+        await Promise.all(catUpdates);
+    }
+};
+
+const removeUserCart = async (customerId) => {
+    if (!customerId) return;
+
+    try {
+        const cart = await Cart.findOne({ user: customerId });
+        if (cart) {
+            cart.items = [];
+            await cart.save();
+        }
+    } catch (error) {
+        // Silently handle cart removal error
+    }
+};
+
+const confirmOrderPayment = async (order) => {
+    order.paymentStatus = 'completed';
+    order.orderStatus = 'confirmed';
+    order.paidAt = new Date();
+    await order.save();
+
+    const { productOps, catOps } = buildStockDecrementOps(order.items);
+    await applyStockOps({ productOps, catOps });
+
+    await updateCatStatusAfterAdoption(order.items);
+
+    if (order.customerId) {
+        await removeUserCart(order.customerId);
+    }
+
+    try {
+        await sendOrderConfirmationEmail(order);
+    } catch (emailError) {
+        // Email failure is non-critical
+    }
 };
 
 const initiateSSLCommerzPayment = async (req, res) => {
@@ -86,30 +153,31 @@ const initiateSSLCommerzPayment = async (req, res) => {
                 return res.status(404).json({ success: false, message: 'Item not found' });
             }
 
-            const { doc, model } = resolved;
+            const { doc, itemType } = resolved;
 
-            if (model === 'cat') {
-                if (doc.status !== 'available') {
-                    return res.status(400).json({ success: false, message: 'Cat not available' });
-                }
-                if (doc.stock < item.quantity) {
-                    return res.status(400).json({ success: false, message: 'Insufficient stock' });
-                }
-            } else {
-                if (doc.stock < item.quantity) {
-                    return res.status(400).json({ success: false, message: 'Insufficient stock' });
-                }
+            if (doc.stock < item.quantity) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Insufficient stock for ${doc.name}. Available: ${doc.stock}`,
+                });
+            }
+
+            if (itemType === 'cat' && doc.status !== 'available') {
+                return res.status(400).json({
+                    success: false,
+                    message: `${doc.name} is not available for adoption`,
+                });
             }
 
             const itemSubtotal = doc.price * item.quantity;
 
             validatedItems.push({
                 productId: doc._id,
-                productName: doc.name,
+                productName: doc.name || doc.title,
                 quantity: item.quantity,
                 price: doc.price,
                 subtotal: itemSubtotal,
-                model,
+                itemType,
             });
 
             subtotal += itemSubtotal;
@@ -156,7 +224,7 @@ const initiateSSLCommerzPayment = async (req, res) => {
             tax,
             totalAmount,
             currency: 'BDT',
-            shipping_method: 'standard',
+            shipping_method: shippingMethod,
             shippingDistrict,
             paymentMethod: 'sslcommerz',
             paymentStatus: 'pending',
@@ -167,20 +235,20 @@ const initiateSSLCommerzPayment = async (req, res) => {
             total_amount: Math.round(totalAmount * 100) / 100,
             currency: 'BDT',
             tran_id: transactionId,
-            success_url: `${process.env.SERVER_URL}/payment/sslcommerz/success/${transactionId}`,
-            fail_url: `${process.env.SERVER_URL}/payment/sslcommerz/fail/${transactionId}`,
-            cancel_url: `${process.env.SERVER_URL}/payment/sslcommerz/fail/${transactionId}`,
+            success_url: `${process.env.SERVER_URL}/payment/sslcommerz/status/${transactionId}`,
+            fail_url: `${process.env.SERVER_URL}/payment/sslcommerz/status/${transactionId}`,
+            cancel_url: `${process.env.SERVER_URL}/payment/sslcommerz/status/${transactionId}`,
             ipn_url: `${process.env.SERVER_URL}/payment/sslcommerz/ipn`,
             product_name: `Order #${orderId}`,
             cus_name: customerName,
             cus_email: customerEmail,
             cus_phone: customerPhone,
-            cus_add1: customerAddress.street || '',
-            cus_city: customerAddress.city || '',
+            cus_add1: typeof customerAddress === 'object' ? customerAddress.street || '' : customerAddress,
+            cus_city: typeof customerAddress === 'object' ? customerAddress.city || '' : '',
             cus_country: 'Bangladesh',
             shipping_method: 'NO',
         };
-        
+
         const apiRes = await sslcz.init(payload);
 
         if (!apiRes?.GatewayPageURL) {
@@ -198,7 +266,10 @@ const initiateSSLCommerzPayment = async (req, res) => {
         if (order) {
             await Order.findByIdAndUpdate(order._id, { paymentStatus: 'failed' });
         }
-        return res.status(500).json({ success: false, message: 'Payment failed' });
+        return res.status(500).json({
+            success: false,
+            message: 'Payment initiation failed',
+        });
     }
 };
 
@@ -206,40 +277,16 @@ const handleSuccessPayment = async (req, res) => {
     const { transactionId } = req.params;
 
     try {
-        const order = await Order.findOneAndUpdate(
-            { transactionId, paymentStatus: 'pending' },
-            { paymentStatus: 'completed', orderStatus: 'confirmed', paidAt: new Date() },
-            { new: true }
-        );
+        const order = await Order.findOne({ transactionId, paymentStatus: 'pending' });
 
         if (!order) {
             return res.redirect(`${process.env.CLIENT_URL}/payment/failed`);
         }
 
-        const { productOps, catOps } = buildStockDecrementOps(order.items);
-        await applyStockOps({ productOps, catOps });
-
-        for (const item of order.items) {
-            if (item.model === 'cat') {
-                await Cat.findByIdAndUpdate(item.productId, {
-                    status: 'adopted',
-                    stock: 0,
-                    inStock: false,
-                });
-            }
-        }
-
-        await sendOrderConfirmationEmail(
-            order.customerEmail,
-            order.customerName,
-            order.orderId,
-            transactionId,
-            order.totalAmount,
-            order.items
-        );
+        await confirmOrderPayment(order);
 
         return res.redirect(`${process.env.CLIENT_URL}/payment/success`);
-    } catch {
+    } catch (error) {
         return res.redirect(`${process.env.CLIENT_URL}/payment/failed`);
     }
 };
@@ -252,11 +299,11 @@ const handleFailPayment = async (req, res) => {
             { transactionId },
             { paymentStatus: 'failed', orderStatus: 'cancelled' }
         );
-
-        return res.redirect(`${process.env.CLIENT_URL}/payment/failed`);
-    } catch {
-        return res.redirect(`${process.env.CLIENT_URL}/payment/failed`);
+    } catch (error) {
+        // Silent fail
     }
+
+    return res.redirect(`${process.env.CLIENT_URL}/payment/failed`);
 };
 
 const handleIPNPayment = async (req, res) => {
@@ -264,21 +311,22 @@ const handleIPNPayment = async (req, res) => {
         const { tran_id, status } = req.body;
 
         const order = await Order.findOne({ transactionId: tran_id });
-        if (!order) return res.json({ success: false });
+        if (!order) {
+            return res.json({ success: false });
+        }
 
         if (status === 'VALID') {
             if (order.paymentStatus !== 'completed') {
-                order.paymentStatus = 'completed';
-                order.orderStatus = 'confirmed';
-                await order.save();
-
-                const { productOps, catOps } = buildStockDecrementOps(order.items);
-                await applyStockOps({ productOps, catOps });
+                await confirmOrderPayment(order);
             }
+        } else if (order.paymentStatus === 'pending') {
+            order.paymentStatus = 'failed';
+            order.orderStatus = 'cancelled';
+            await order.save();
         }
 
         return res.json({ success: true });
-    } catch {
+    } catch (error) {
         return res.json({ success: false });
     }
 };

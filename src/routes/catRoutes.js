@@ -1,5 +1,4 @@
 const express = require('express');
-const router = express.Router();
 const multer = require('multer');
 const {
     createCat,
@@ -17,6 +16,8 @@ const {
 } = require('../controllers/catController');
 const { protect } = require('../middleware/authMiddleware');
 
+const router = express.Router();
+
 const upload = multer({
     storage: multer.memoryStorage(),
     limits: { fileSize: 5 * 1024 * 1024 },
@@ -31,19 +32,28 @@ const catUpload = upload.fields([
     { name: 'gallery', maxCount: 4 },
 ]);
 
-
 router.get('/', getAllCats);
 router.get('/status/:status', getCatsByStatus);
 router.get('/:id', getCatById);
-router.post('/', protect, catUpload, createCat);
-router.put('/:id', protect, catUpload, updateCat);
-router.delete('/:id', protect, deleteCat);
-router.patch('/:id/status', protect, updateCatStatus);
-router.post('/:id/medical-history', protect, addMedicalHistory);
-
 router.get('/:id/reviews', getReviews);
-router.post('/:id/reviews', addReview);
-router.delete('/:id/reviews/:reviewId', protect, deleteReview);
-router.patch('/:id/reviews/:reviewId/approve', protect, toggleReviewApproval);
+
+router.use(protect);
+
+router.route('/')
+    .post(catUpload, createCat);
+
+router.route('/:id')
+    .put(catUpload, updateCat)
+    .delete(deleteCat);
+
+router.patch('/:id/status', updateCatStatus);
+router.post('/:id/medical-history', addMedicalHistory);
+
+router.route('/:id/reviews')
+    .post(addReview);
+
+router.route('/:id/reviews/:reviewId')
+    .delete(deleteReview)
+    .patch(toggleReviewApproval);
 
 module.exports = router;

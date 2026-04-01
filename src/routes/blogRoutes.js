@@ -1,5 +1,5 @@
 const express = require('express');
-const router = express.Router();
+const multer = require('multer');
 const { protect } = require('../middleware/authMiddleware');
 const {
   createBlog,
@@ -9,17 +9,28 @@ const {
   updateBlog,
   deleteBlog,
 } = require('../controllers/blogController');
-const multer = require('multer');
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
-// Public routes
-router.get('/', getBlogs);
-router.get('/:id', getBlogById);
+const router = express.Router();
+const upload = multer({ 
+  storage: multer.memoryStorage(), 
+  limits: { fileSize: 5 * 1024 * 1024 } 
+});
 
-// Protected routes
-router.post('/', protect, upload.single('image'), createBlog);
-router.get('/my/blogs', protect, getMyBlogs);
-router.put('/:id', protect, upload.single('image'), updateBlog);
-router.delete('/:id', protect, deleteBlog);
+router.route('/')
+  .get(getBlogs);
+
+router.route('/:id')
+  .get(getBlogById);
+
+router.use(protect);
+
+router.route('/')
+  .post(upload.single('image'), createBlog);
+
+router.get('/my/blogs', getMyBlogs);
+
+router.route('/:id')
+  .put(upload.single('image'), updateBlog)
+  .delete(deleteBlog);
 
 module.exports = router;

@@ -1,15 +1,24 @@
-const express = require("express");
-const router = express.Router();
+const express = require('express');
 const {
   getSocialVideos,
   uploadSocialVideo,
   updateSocialVideo,
   deleteSocialVideo,
-} = require("../controllers/socialVideoController");
+} = require('../controllers/socialVideoController');
+const { protect } = require('../middleware/authMiddleware');
 
-router.get("/", getSocialVideos);
-router.post("/", uploadSocialVideo);
-router.put("/:id", updateSocialVideo);
-router.delete("/:id", deleteSocialVideo);
+const router = express.Router();
+
+router.route('/')
+  .get(getSocialVideos);
+
+router.use(protect);
+
+router.route('/')
+  .post(uploadSocialVideo);
+
+router.route('/:id')
+  .put(updateSocialVideo)
+  .delete(deleteSocialVideo);
 
 module.exports = router;

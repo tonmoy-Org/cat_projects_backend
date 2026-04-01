@@ -1,6 +1,4 @@
 const express = require('express');
-const router = express.Router();
-
 const {
   initiateSSLCommerzPayment,
   handleSuccessPayment,
@@ -8,9 +6,13 @@ const {
   handleIPNPayment,
 } = require('../controllers/paymentController');
 
+const router = express.Router();
+
 router.post('/sslcommerz/initiate', initiateSSLCommerzPayment);
-router.post('/sslcommerz/success/:transactionId', handleSuccessPayment);
-router.get('/sslcommerz/fail/:transactionId', handleFailPayment);
 router.post('/sslcommerz/ipn', handleIPNPayment);
+
+router.route('/sslcommerz/status/:transactionId')
+  .post(handleSuccessPayment)
+  .get(handleFailPayment);
 
 module.exports = router;

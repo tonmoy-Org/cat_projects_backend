@@ -1,10 +1,25 @@
 const express = require('express');
-const router = express.Router();
-const { getAllOrders, getOrderByIdOrEmail, deleteOrderById, updateOrderStatus } = require('../controllers/orderController');
+const { 
+  getAllOrders, 
+  getOrderByIdOrEmail, 
+  deleteOrderById, 
+  updateOrderStatus 
+} = require('../controllers/orderController');
+const { protect } = require('../middleware/authMiddleware');
 
-router.get('/', getAllOrders);
-router.get('/:value', getOrderByIdOrEmail);
-router.put('/:orderId/status', updateOrderStatus); 
-router.delete('/:id', deleteOrderById);
+const router = express.Router();
+
+router.use(protect);
+
+router.route('/')
+  .get(getAllOrders);
+
+router.route('/:value')
+  .get(getOrderByIdOrEmail);
+
+router.route('/:id')
+  .delete(deleteOrderById);
+
+router.patch('/:orderId/status', updateOrderStatus);
 
 module.exports = router;

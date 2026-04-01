@@ -1,5 +1,4 @@
 const express = require('express');
-const router = express.Router();
 const multer = require('multer');
 const { protect } = require('../middleware/authMiddleware');
 const {
@@ -13,6 +12,8 @@ const {
   deleteReview,
   toggleReviewApproval,
 } = require('../controllers/productController');
+
+const router = express.Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -28,15 +29,27 @@ const productUpload = upload.fields([
   { name: 'gallery', maxCount: 4 },
 ]);
 
-router.get('/', getAllProducts);
-router.get('/:id', getProductById);
-router.post('/', protect, productUpload, createProduct);
-router.put('/:id', protect, productUpload, updateProduct);
-router.delete('/:id', protect, deleteProduct);
+router.route('/')
+  .get(getAllProducts);
+
+router.route('/:id')
+  .get(getProductById);
 
 router.get('/:id/reviews', getReviews);
-router.post('/:id/reviews', addReview);                                    
-router.delete('/:id/reviews/:reviewId', protect, deleteReview);            
-router.patch('/:id/reviews/:reviewId/approve', protect, toggleReviewApproval);
+
+router.use(protect);
+
+router.route('/')
+  .post(productUpload, createProduct);
+
+router.route('/:id')
+  .put(productUpload, updateProduct)
+  .delete(deleteProduct);
+
+router.post('/:id/reviews', addReview);
+
+router.route('/:id/reviews/:reviewId')
+  .delete(deleteReview)
+  .patch(toggleReviewApproval);
 
 module.exports = router;
