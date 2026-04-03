@@ -497,13 +497,11 @@ const getReviews = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Product not found' });
     }
 
-    const approvedReviews = product.reviews.filter(r => r.approved);
-
     res.status(200).json({
       success: true,
       averageRating: product.averageRating,
       reviewCount: product.reviewCount,
-      data: approvedReviews,
+      data: product,
     });
   } catch (error) {
     res.status(500).json({

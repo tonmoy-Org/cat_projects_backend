@@ -50,6 +50,6 @@ router.post('/:id/reviews', addReview);
 
 router.route('/:id/reviews/:reviewId')
   .delete(deleteReview)
-  .patch(toggleReviewApproval);
+  .put(toggleReviewApproval);
 
 module.exports = router;
